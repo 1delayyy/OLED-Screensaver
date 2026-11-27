@@ -34,7 +34,7 @@ except Exception:
     pystray = None
 
 APP_NAME = "OLED Screensaver"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 APP_AUTHOR = "Delay"
 
 FROZEN = getattr(sys, "frozen", False)  # True when running as a packaged .exe
@@ -1100,6 +1100,18 @@ PNP_BRANDS = {"AUS": "ASUS", "ACI": "ASUS", "GSM": "LG", "SAM": "Samsung", "SEC"
               "BNQ": "BenQ", "HWP": "HP", "HPN": "HP", "LEN": "Lenovo", "VSC": "ViewSonic", "ENC": "EIZO",
               "NEC": "NEC", "SNY": "Sony", "IVM": "iiyama"}
 
+# Words people type that name a brand, and model-number patterns that give a brand away.
+BRAND_WORDS = {"ASUS": "ASUS", "ROG": "ASUS", "PROART": "ASUS", "LG": "LG", "ULTRAGEAR": "LG", "SAMSUNG": "Samsung",
+               "ODYSSEY": "Samsung", "MSI": "MSI", "DELL": "Dell", "ALIENWARE": "Dell", "PHILIPS": "Philips",
+               "EVNIA": "Philips", "GIGABYTE": "Gigabyte", "AORUS": "Gigabyte", "AOC": "AOC", "AGON": "AOC",
+               "ACER": "Acer", "PREDATOR": "Acer", "BENQ": "BenQ", "MOBIUZ": "BenQ", "HP": "HP", "OMEN": "HP",
+               "LENOVO": "Lenovo", "VIEWSONIC": "ViewSonic", "EIZO": "EIZO", "SONY": "Sony", "CORSAIR": "Corsair",
+               "XENEON": "Corsair"}
+MODEL_FAMILIES = [("Dell", r"^AW\d{4}"), ("MSI", r"^(MPG|MAG|MD)\d{2,3}"), ("ASUS", r"^(PG|XG|PA|VG|VY|PB|MG)\d{2}"),
+                  ("LG", r"^\d{2}G[A-Z]\d{2,3}"), ("Philips", r"^\d{2}M\d[A-Z]\d{4}"),
+                  ("Gigabyte", r"^(FO|MO)\d{2}"), ("AOC", r"^AG\d{3}"), ("Samsung", r"^(LS)?\d{2}[A-Z]G\d{2}"),
+                  ("Samsung", r"^G[5-9]\d[A-Z]{2}")]
+
 # Model numbers (upper case, no spaces or dashes) of monitors known to use OLED / QD-OLED panels.
 OLED_MODELS = {
     "ASUS": ("PG32UCDM", "PG32UCDP", "PG27UCWM", "PG34WCDN", "PG259QWS", "PG27AQDM", "PG27AQDP", "PG34WCDM",
@@ -1141,27 +1153,89 @@ SENSOR_INFO = {
              "how": "Look for the proximity sensor setting in the monitor's on-screen menu."},
 }
 
-# What to switch on on the monitor itself (from the makers' own support pages and reviews).
-BRAND_TIPS = {
-    "LG": ["Turn on Screen Move (LG's pixel shift). On some UltraGear OLED monitors it is OFF by default.",
-           "Use the OLED Care screen saver, and let the monitor go on standby so it can run OLED Image Cleaning "
-           "(it starts by itself after about 4 hours of use)."],
-    "Samsung": ["Check that Pixel Shift is on.",
-                "Set Adjust Logo Brightness to High (Settings > General & Privacy > Panel Care).",
-                "Let Screen Optimization run (it starts after about 4 hours of use, once the monitor is off).",
-                "Run Pixel Refresh if you see after-images (it isn't on every model)."],
-    "ASUS": ["Use OLED Care in the monitor's menu or ASUS DisplayWidget Center: Pixel Cleaning, Screen Move / "
-             "Pixel Shift, Screen Saver and Boundary Detection."],
-    "MSI": ["Use MSI OLED Care (monitor menu or the MSI Gaming Intelligence app): Pixel Shift and Panel Protect."],
-    "Dell": ["Let Pixel Refresh run (it starts by itself when the monitor goes on standby after about 4 hours of "
-             "use) and watch the Panel Health dot: yellow = run Pixel Refresh, red = run Panel Refresh.",
-             "Dell and Alienware OLED monitors have fewer built-in protections than other brands (reviews found no "
-             "logo dimming, taskbar detection or screen saver on several models), so this app's black screen, "
-             "hidden icons and hidden taskbar matter even more here."],
+# What to switch on in the monitor's own on-screen menu (OSD), from the makers' manuals and support pages.
+OSD_GUIDE = {
+    "LG": {"open": "Open the monitor's menu with its joystick, or press the [OLED Care] button if your model has one.",
+           "steps": ["OLED Care > Screen Move: turn it ON. LG's manual recommends it, and on some UltraGear OLED "
+                     "models it is OFF by default.",
+                     "OLED Care > Screen Saver: turn it ON, so the screen turns off when nothing moves.",
+                     "OLED Care > Image Cleaning: run it by hand after a long session (it also starts by itself "
+                     "after roughly 4 hours of use, when the monitor is on standby; about 10 minutes on the "
+                     "45GR95QE).",
+                     "OLED Care > Pixel Cleaning: a short clean (about a minute on the 45GR95QE) - run it if you "
+                     "see lines or spots.",
+                     "General > Automatic Standby: turn it on, so the monitor sleeps and can run its cleaning."],
+           "note": "Menu names and times come from the 27GR95QE and 45GR95QE manuals; other LG models can differ."},
+    "Samsung": {"open": "Open the menu (Home button or remote, then Menu), then General & Privacy > Panel Care.",
+                "steps": ["Panel Care > Pixel Shift: leave it on (it isn't available on 2024 models).",
+                          "Panel Care > Adjust Logo Brightness: set it to High, to dim logos and other static "
+                          "bright shapes.",
+                          "Panel Care > Pixel Refresh: run it when you stop using the monitor. It powers the screen "
+                          "off for over an hour and a white line may show during it. Don't unplug the monitor.",
+                          "Screen Optimization runs by itself after about 4 hours of use, once the monitor is off - "
+                          "so leave it plugged in."],
+                "note": "From Samsung's support pages for Odyssey OLED monitors; options differ by model and year."},
+    "ASUS": {"open": "Press the monitor's 5-way joystick to open the menu, then open OLED Care.",
+             "steps": ["OLED Care > Screen Saver: turn it on - it dims the screen when the picture stays the same.",
+                       "OLED Care > Screen Move: turn it on and pick a movement level (this is pixel shift).",
+                       "OLED Care > Pixel Cleaning: run it when you finish for the day (about 6 minutes; it starts "
+                       "when the monitor is turned off, so don't unplug it). Set Pixel Cleaning Reminder to 2, 4 "
+                       "or 8 hours.",
+                       "OLED Care > Auto Logo Brightness, and Uniform Brightness in the Image menu: leave them on to "
+                       "dim static logos and keep the brightness even.",
+                       "The ASUS DisplayWidget Center program shows the same OLED Care settings on your PC."],
+             "note": "From the ROG Swift OLED PG32UCDM and PG32UCDM3 user guides; other ASUS models vary."},
+    "MSI": {"open": "Press the monitor's joystick (Navi key) to open the menu, then open OLED Care.",
+            "steps": ["OLED Care > Pixel Shift: turn it on (Slow, Normal or Fast).",
+                      "OLED Care > Static Screen Detection: turn it on - it dims the picture after it has stayed "
+                      "still for a while.",
+                      "OLED Care > Taskbar Detection: turn it on - it dims the taskbar area, a good partner for "
+                      "this app's taskbar options.",
+                      "OLED Care > Multi Logo Detection and Boundary Detection: turn them on to dim logos and "
+                      "window edges.",
+                      "OLED Care > Panel Protect: it runs by itself after about 4 hours of use when the monitor is "
+                      "off or on standby. MSI recommends letting it run, so leave the monitor plugged in."],
+            "note": "From MSI's MPG OLED user guides; names vary by model."},
+    "Dell": {"open": "Press the joystick at the bottom of the monitor to open the Menu Launcher, then choose Menu.",
+             "steps": ["Menu > Others > OLED Panel Maintenance > Pixel Refresh: it runs by itself after about 4 hours "
+                       "of use when the monitor goes on standby or off (6 to 8 minutes, the power light blinks "
+                       "green). Answer 'No, do it during monitor in Standby' if you're busy.",
+                       "Menu > Others > OLED Panel Maintenance > Panel Refresh (if your model has it): a longer clean "
+                       "(about an hour) that the monitor asks for after roughly 1,500 hours of use.",
+                       "Watch the Panel Health dot in the Menu Launcher: green is fine, yellow suggests a Pixel "
+                       "Refresh, red means a refresh is overdue.",
+                       "Leave the monitor plugged in, and don't press the power button during a refresh."],
+             "note": "From Dell's support pages for the Alienware AW3423DW, AW3423DWF and AW3225QF. Reviews found no "
+                     "logo dimming, taskbar detection or screen saver on several of these models, so this app's "
+                     "black screen, hidden icons and hidden taskbar matter even more here."},
+    "Philips": {"open": "Press the joystick right to open the menu, then go to Setup > OLED Panel Care.",
+                "steps": ["OLED Panel Care > Screen Saver: set it to Slow or Fast (never Off).",
+                          "OLED Panel Care > Pixel Orbiting: set it to Slow, Normal or Fast (this is pixel shift).",
+                          "OLED Panel Care > Pixel Refresh: the monitor asks for it after 4 hours of use (and again "
+                          "every 2 hours) and runs it by itself at 16 hours - say yes when you stop for the day, and "
+                          "don't unplug it.",
+                          "Panel Refresh runs automatically after about 2,000 hours (on the 34M2C8600).",
+                          "OLED Panel Care > Auto Warning: leave it on so the monitor reminds you."],
+                "note": "From the Philips Evnia 34M2C8600 and 27M2N8500 user manuals; other models can differ."},
+    "Gigabyte": {"open": "Press the Control button to open the Main menu, then move it left to open OLED Care.",
+                 "steps": ["OLED Care > Settings > Pixel Shift: turn it on.",
+                           "OLED Care > Settings > Static Control: turn it on - it lowers the brightness when the "
+                           "picture stays still.",
+                           "OLED Care > Settings > Sub-Logo Dim and Corner Dim: turn them on to dim logos and the "
+                           "four corners.",
+                           "OLED Care > Settings > Pixel Clean: Gigabyte recommends running it after more than 4 "
+                           "hours of use (Start Cleaning, or Start Time Delay to do it later).",
+                           "OLED Care > Status shows how long the screen has been used."],
+                 "note": "From the AORUS FO32U2, FO32U2P and FO27Q3 user guide; other models can differ."},
 }
-GENERIC_OLED_TIPS = ["Keep the monitor's pixel shift / screen move feature on.",
-                     "Leave the monitor plugged in and let it run its own pixel refresh when it asks.",
-                     "Keep brightness moderate and avoid leaving bright static windows on screen for hours."]
+GENERIC_OLED_TIPS = [
+    "In the monitor's own menu, look for a section called OLED Care, Panel Care, OLED Panel Maintenance or Screen "
+    "Maintenance.",
+    "Turn on pixel shift (also called Screen Move or Pixel Orbiting) and any screen saver or static-screen dimming.",
+    "Run the pixel refresh / pixel cleaning when it asks and whenever you stop using the monitor.",
+    "Leave the monitor plugged in, and in standby overnight, so its automatic refresh can run. Don't switch it off "
+    "at the wall.",
+    "Keep brightness moderate and avoid leaving bright static windows on screen for hours."]
 
 # What this app can do for an OLED screen.
 RECOMMENDED_OLED = {"enabled": True, "minutes": 2, "hide_icons": True, "taskbar_while_black": True,
@@ -1297,6 +1371,24 @@ def _norm(text):
     return re.sub(r"[^A-Z0-9]", "", str(text).upper())
 
 
+def identify_brand(model_text, edid_brand=""):
+    """The brand for a model you typed: from a brand word ('LG', 'ROG'), a known model number, or the pattern of the
+    model number. Falls back to the brand Windows reported."""
+    words = re.findall(r"[A-Z0-9]+", str(model_text).upper())
+    for word in words:
+        if word in BRAND_WORDS:
+            return BRAND_WORDS[word]
+    norm = _norm(model_text)
+    for brand, fragments in OLED_MODELS.items():
+        if any(_norm(fragment) in norm for fragment in fragments):
+            return brand
+    for word in words + [norm]:
+        for brand, pattern in MODEL_FAMILIES:
+            if re.match(pattern, word):
+                return brand
+    return edid_brand
+
+
 def display_title(info, model_text=""):
     brand = info.get("brand") or f"Unknown brand ({info.get('brand_code', '?')})"
     name = (model_text or info.get("name") or "").strip()
@@ -1314,10 +1406,12 @@ def classify_panel(info, model_text, mode="auto"):
     model = _norm(model_text or info.get("name", ""))
     if "OLED" in model:
         return "oled", "its name says OLED"
-    for fragment in OLED_MODELS.get(info.get("brand", ""), ()):
-        if _norm(fragment) in model:
-            return "oled", f"{fragment} is a known OLED model"
-    return "unknown", "its name doesn't say"
+    brand = info.get("brand", "")
+    for owner in ([brand] if brand else list(OLED_MODELS)):
+        for fragment in OLED_MODELS.get(owner, ()):
+            if _norm(fragment) in model:
+                return "oled", f"{fragment} is a known OLED model"
+    return "unknown", "it isn't in my list of OLED models"
 
 
 def sensor_status(brand, model_text):
@@ -1354,17 +1448,44 @@ def recommended_settings(screen_count):
     return changes
 
 
+def osd_lines(brand, confirmed=True):
+    """The brand's own on-screen-menu steps, as report lines ([] if I have none for this brand)."""
+    guide = OSD_GUIDE.get(brand)
+    if not guide:
+        return []
+    head = (f"ON THE MONITOR ITSELF - {brand}" if confirmed else
+            f"ON THE MONITOR ITSELF - the usual {brand} OLED settings (your exact model may use different names)")
+    lines = [head, f"  {guide['open']}"]
+    lines += [f"  {number}. {step}" for number, step in enumerate(guide["steps"], 1)]
+    if guide.get("note"):
+        lines.append(f"  ({guide['note']})")
+    return lines + [""]
+
+
 def build_display_report(displays, mode, model_override, settings, taskbar_autohide, screen_count):
     """The text shown on the Display tab."""
+    typed = model_override.strip()
+    if not displays and typed:  # Windows told us nothing, but you typed a model - work from that
+        displays = [{"brand_code": "", "brand": "", "name": "", "product_code": 0, "serial": 0, "year": 1990}]
     if not displays:
         return ("I couldn't read your monitor's details from Windows.\n\n"
                 "Type the model number printed on the back of the monitor into the box above and I'll work from "
                 "that, or choose OLED or LCD in 'My screen is'.")
     lines, panels = [], []
-    for number, info in enumerate(displays, 1):
-        model_text = model_override.strip() if number == 1 and model_override.strip() else info.get("name", "")
+    if typed:
+        lines += [f"Using the model number you typed: {typed} (for display 1)", ""]
+    for number, original in enumerate(displays, 1):
+        info = dict(original)
+        is_typed = number == 1 and bool(typed)
+        model_text = typed if is_typed else info.get("name", "")
+        source = ""
+        if is_typed:
+            brand = identify_brand(typed, info.get("brand", ""))
+            if brand and brand != info.get("brand", ""):
+                source = f" - brand worked out from the model number you typed"
+            info["brand"] = brand
         panel, why = classify_panel(info, model_text, mode)
-        panels.append((number, info, model_text, panel))
+        panels.append((number, info, model_text, panel, is_typed))
         details = []
         if info.get("width_px"):
             details.append(f"{info['width_px']}x{info['height_px']}" + (f" at {info['hz']} Hz" if info.get("hz") else ""))
@@ -1372,14 +1493,15 @@ def build_display_report(displays, mode, model_override, settings, taskbar_autoh
             details.append(f"{(info['width_cm'] ** 2 + info['height_cm'] ** 2) ** 0.5 / 2.54:.0f} inch")
         if info.get("year", 1990) > 1990:
             details.append(f"made {info['year']}")
-        lines.append(f"DISPLAY {number}: {display_title(info, model_text)}")
+        lines.append(f"DISPLAY {number}: {display_title(info, model_text)}{source}")
         if details:
             lines.append("  " + ", ".join(details))
         label = {"oled": "OLED - can suffer burn-in", "lcd": "LCD - doesn't suffer burn-in",
-                 "unknown": "can't tell whether it is OLED"}[panel]
+                 "unknown": "can't confirm it is OLED"}[panel]
         lines.append(f"  Screen type: {label} ({why})")
         lines.append("")
     kinds = {p[3] for p in panels}
+    guide_shown = set()
     if "oled" in kinds:
         lines += ["BURN-IN: OLED screens can keep a faint ghost of things that stay on screen for hours, such as the "
                   "taskbar, icons and window frames. Keeping the screen black while you're away, and hiding static "
@@ -1388,22 +1510,35 @@ def build_display_report(displays, mode, model_override, settings, taskbar_autoh
         lines += [f"  [{'on ' if done else 'off'}] {what}" for what, done in
                   recommended_items(settings, taskbar_autohide, screen_count)]
         lines += ["  Press 'Apply recommended settings' to switch the missing ones on.", ""]
-        brands = list(dict.fromkeys(i["brand"] for _, i, _, k in panels if k == "oled"))
-        for brand in brands:
-            tips = BRAND_TIPS.get(brand)
-            if tips:
-                lines += [f"ON THE MONITOR ITSELF ({brand})"] + [f"  - {tip}" for tip in tips] + [""]
-        lines += ["ON ANY OLED MONITOR"] + [f"  - {tip}" for tip in GENERIC_OLED_TIPS] + [""]
-    elif "unknown" in kinds:
+    elif "unknown" in kinds and not typed:
         lines += ["I can't tell from the monitor's name whether it is OLED. Most monitors are LCD, and LCD screens "
                   "don't suffer burn-in. If yours is OLED, choose that in 'My screen is' (or type the model number "
-                  "from the back of the monitor above) and I'll show the recommendations.", ""]
+                  "from the back of the monitor above) and I'll show the recommendations and the menu steps.", ""]
+    elif "unknown" in kinds:
+        lines += ["I can't confirm from the model number that this is an OLED monitor (most monitors are LCD, and LCD "
+                  "screens don't suffer burn-in). If it is OLED, choose 'OLED or QD-OLED' in 'My screen is' to see "
+                  "this app's recommended settings. The menu steps for the brand are below in case they help.", ""]
     else:
         lines += ["LCD screens don't suffer permanent burn-in, so you don't need the black screen for protection. "
                   "Turning the display off after a while (While black tab) still saves power.", ""]
+    for number, info, model_text, panel, is_typed in panels:  # the monitor's own menu, per brand
+        brand = info.get("brand", "")
+        if brand in guide_shown or panel == "lcd":
+            continue
+        if panel == "oled" or (panel == "unknown" and is_typed):
+            guide = osd_lines(brand, confirmed=(panel == "oled"))
+            if guide:
+                lines += guide
+                guide_shown.add(brand)
+            elif panel == "oled":
+                shown_name = brand or "this brand"
+                lines += [f"I don't have {shown_name}-specific menu steps for your monitor, so follow the general "
+                          "guide below and your manual.", ""]
+    if "oled" in kinds or (typed and "lcd" not in kinds):
+        lines += ["OLED CARE IN GENERAL"] + [f"  - {tip}" for tip in GENERIC_OLED_TIPS] + [""]
     lines.append("PRESENCE SENSOR")
     shown = False
-    for number, info, model_text, panel in panels:
+    for number, info, model_text, panel, is_typed in panels:
         status, entry = sensor_status(info.get("brand", ""), model_text)
         title = display_title(info, model_text)
         if status == "yes":
@@ -1424,7 +1559,8 @@ def build_display_report(displays, mode, model_override, settings, taskbar_autoh
                   "one, its manual will call it a presence, proximity or human sensor - follow the instructions for "
                   "your exact brand and model to turn it on and calibrate it. This app's idle timer does the same "
                   "job from the PC side.", ""]
-    lines.append("This is a guide based on the makers' manuals and reviews. Your monitor's own manual is the final word.")
+    lines.append("This is a guide based on the makers' manuals and reviews. Your monitor's own manual is the final word - "
+                 "press 'Look up my manual' to find it.")
     return "\n".join(lines)
 
 
@@ -1493,6 +1629,7 @@ class App:
         self._last_accent = -1e9
         self._displays = []            # monitors read from Windows (brand, model, ...)
         self._displays_loaded = False
+        self._model_job = None         # the pending 'you stopped typing' update
         root.title("OLED Screensaver")
         root.resizable(True, True)
         root.protocol("WM_DELETE_WINDOW", self.hide_window)  # X = hide, Quit button = exit
@@ -1613,14 +1750,14 @@ class App:
             widget.bind("<Return>", lambda e: self.on_change())
 
         # ----- While black tab -----
-        ttk.Label(black_tab, text="Minimise windows on:").pack(anchor="w")
+        ttk.Label(display_tab, text="Minimise windows on:").pack(anchor="w")
         self.display_options = [("all", "All displays")] + [
             (m["device"], monitor_label(m, i + 1)) for i, m in enumerate(list_monitors())]
         device, label = next((o for o in self.display_options if o[0] == self.s["display"]),
                              self.display_options[0])
         self.s["display"] = device
         self.display_var = tk.StringVar(value=label)
-        combo = ttk.Combobox(black_tab, textvariable=self.display_var, state="readonly",
+        combo = ttk.Combobox(display_tab, textvariable=self.display_var, state="readonly",
                              values=[lbl for _, lbl in self.display_options])
         combo.pack(fill="x")
         combo.bind("<<ComboboxSelected>>", lambda e: self.on_change())
@@ -1634,7 +1771,7 @@ class App:
         ttk.Checkbutton(black_tab, text="Hide the taskbar", variable=self.tbblack_var,
                         command=self.on_change).pack(anchor="w", pady=(4, 0))
         self.all_var = tk.BooleanVar(value=self.s["black_all_screens"])
-        ttk.Checkbutton(black_tab, text="Black out all my screens (not just the main one)", variable=self.all_var,
+        ttk.Checkbutton(display_tab, text="Black out all my screens (not just the main one)", variable=self.all_var,
                         command=self.on_change).pack(anchor="w", pady=(4, 0))
         sleep_row = ttk.Frame(black_tab)
         sleep_row.pack(anchor="w", pady=(4, 0))
@@ -1741,6 +1878,7 @@ class App:
         # ----- Display tab: monitor brand and model, burn-in advice, presence sensor -----
         self.panel_modes = [("auto", "Detect automatically"), ("oled", "OLED or QD-OLED"),
                             ("lcd", "LCD (IPS, VA or TN)")]
+        ttk.Separator(display_tab).pack(fill="x", pady=8)
         panel_row = ttk.Frame(display_tab)
         panel_row.pack(fill="x")
         ttk.Label(panel_row, text="My screen is:").pack(side="left")
@@ -1752,15 +1890,22 @@ class App:
         panel_combo.bind("<<ComboboxSelected>>", lambda e: self.on_display_option())
         model_row = ttk.Frame(display_tab)
         model_row.pack(fill="x", pady=(4, 0))
-        ttk.Label(model_row, text="Model number on the label (optional):").pack(side="left")
+        ttk.Label(model_row, text="Model number (optional):").pack(side="left")
         self.display_model_var = tk.StringVar(value=self.s["display_model"])
         model_entry = ttk.Entry(model_row, textvariable=self.display_model_var)
         model_entry.pack(side="left", fill="x", expand=True, padx=6)
         model_entry.bind("<FocusOut>", lambda e: self.on_display_option())
         model_entry.bind("<Return>", lambda e: self.on_display_option())
-        self.display_text = tk.Text(display_tab, wrap="word", height=14, font="TkDefaultFont", relief="flat",
+        self.display_model_var.trace_add("write", self._model_typed)  # update while you type, no need to press Enter
+        ttk.Button(model_row, text="Find instructions", command=self.on_display_option).pack(side="left")
+        text_holder = ttk.Frame(display_tab)
+        text_holder.pack(fill="both", expand=True, pady=(8, 0))
+        self.display_text = tk.Text(text_holder, wrap="word", height=14, font="TkDefaultFont", relief="flat",
                                     highlightthickness=0)
-        self.display_text.pack(fill="both", expand=True, pady=(8, 0))
+        display_scroll = ttk.Scrollbar(text_holder, orient="vertical", command=self.display_text.yview)
+        self.display_text.configure(yscrollcommand=display_scroll.set)
+        self.display_text.pack(side="left", fill="both", expand=True)
+        display_scroll.pack(side="right", fill="y")
         display_row = ttk.Frame(display_tab)
         display_row.pack(fill="x", pady=(8, 0))
         ttk.Button(display_row, text="Detect again", command=self.refresh_display_info).pack(side="left")
@@ -2687,6 +2832,16 @@ class App:
         self.display_text.delete("1.0", "end")
         self.display_text.insert("1.0", text)
 
+    def _model_typed(self, *_):
+        """Called on every keystroke in the model box; updates the advice once you pause."""
+        if self._model_job is not None:
+            self.root.after_cancel(self._model_job)
+        self._model_job = self.root.after(700, self._model_typed_done)
+
+    def _model_typed_done(self):
+        self._model_job = None
+        self.on_display_option()
+
     def on_display_option(self):
         self.on_change()
         self.render_display_report()
@@ -2694,10 +2849,12 @@ class App:
     def lookup_manual(self):
         """Open a web search for this monitor's manual, so you can follow the steps for your exact model."""
         info = self._displays[0] if self._displays else {}
-        brand = info.get("brand", "")
-        model = self.display_model_var.get().strip() or info.get("name", "")
-        query = (f"{brand} {model} user manual presence proximity sensor OLED care".strip() if (brand or model)
-                 else "monitor user manual presence proximity sensor OLED care")
+        typed = self.display_model_var.get().strip()
+        brand = identify_brand(typed, info.get("brand", "")) if typed else info.get("brand", "")
+        model = typed or info.get("name", "")
+        words = model if (not brand or model.upper().startswith(brand.upper())) else f"{brand} {model}"
+        query = (f"{words} user manual OLED care presence proximity sensor" if words.strip()
+                 else "monitor user manual OLED care presence proximity sensor")
         webbrowser.open("https://www.google.com/search?q=" + quote_plus(query))
 
     def apply_recommended(self):
